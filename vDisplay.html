@@ -1,0 +1,574 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>wsSimpleDisplay</title>
+
+		<!-- css needed for jquery UI -->
+		<link href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" rel="stylesheet" type="text/css" /> 
+		<!-- purecss simple css -->
+		<link rel="stylesheet" href="https://unpkg.com/purecss@0.6.2/build/pure-min.css">
+		<link rel="stylesheet" href="https://unpkg.com/purecss@0.6.2/build/grids-responsive-min.css">
+
+		<!-- jquery -->
+		<script type="text/javascript" src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+		<!-- jquery UI - gives us sortable and icons -->
+		<script type="text/javascript" src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+		<!-- jquery-popup-overlay - gives up popup & tooltips - http://dev.vast.com/jquery-popup-overlay/ -->
+		<script src="https://cdn.rawgit.com/vast-engineering/jquery-popup-overlay/1.7.13/jquery.popupoverlay.js"></script>
+		<!-- add touch events support to sortable from http://touchpunch.furf.com/ -->
+		<script src="res/jquery.ui.touch-punch.min.js"></script>
+
+		<!-- font awesome with info@aprsworld.com key -->
+		<script src="https://use.fontawesome.com/269a99f1b2.js"></script>
+
+		
+		<style>
+.right {
+	text-align: right;
+}
+
+.debug {
+	/* turned on with a URL parameter of debug=1 */
+	color: red;
+}
+
+.edit {
+	/* turned on with a URL parameter of edit=1 or by clicking edit button */
+	visibility: none;
+}
+
+button {
+	margin: 10px;
+}
+
+/* purecss border and padding */
+.pure-g > div {
+	-webkit-box-sizing: border-box;
+	-moz-box-sizing: border-box;
+	box-sizing: border-box;
+}
+.l-box {
+	padding: 1em;
+}
+		</style>
+	</head>
+	<body>
+
+<script type="text/JavaScript">
+var saveURL="http://data.aprsworld.com/wsSimpleDisplay/save.php";
+var dataURL="http://cam.aprsworld.com:8888/data/now.json/A4753";
+var refreshSeconds=5;
+var debug=false;
+var edit=false;
+/* track our elements on page when done with editing */
+var idsAutoData = [];
+var idsAutoDataHidden = [];
+
+var stationID="";
+
+var pauseLoadNewData=false;
+
+/* don't cache ajax data */
+$.ajaxSetup({ cache: false }); 
+
+function idsUpdate() {
+	console.log("# idsUpdate()");
+
+	/* create an array with ids, in order, to send back to server to save */
+	idsAutoDataHidden = $('table#autoDataHidden tr').map(function() {
+		if ( this.id !== undefined && this.id !== "" )
+			return this.id;
+	});
+
+	idsAutoData = $('table#autoData tr').map(function() {
+		if ( this.id !== undefined && this.id !== "" )
+			return this.id;
+	});
+}
+
+/* save our page layout and settings to remove server */
+function pageSave() {
+	console.log("# pageSave()");
+
+	/* make sure we have current ids locations */
+	idsUpdate();
+
+	/* create our data array to post to remove server */
+	var postData = {};
+
+	/* site name */
+	postData['dataURL']=dataURL;
+
+	/* loop through ids and make in url / PHP friendly flat format */
+	for ( var i=0 ; i<idsAutoData.length ; i++ ) {
+		postData['idsAutoData[' + i + ']']=idsAutoData[i];
+	}
+	for ( var i=0 ; i<idsAutoDataHidden.length ; i++ ) {
+		postData['idsAutoDataHidden[' + i + ']']=idsAutoDataHidden[i];
+	}
+
+	$.ajax({
+		url: saveURL,
+		type: 'POST',
+		data: postData
+	});
+
+
+	console.log(postData);
+
+
+
+}
+
+/* turn on or off page editing */
+function pageEdit(editable) {
+	console.log("# pageEdit(" + editable + ")");
+
+
+	if ( editable ) {
+		/* make page editable */
+
+		/* edit button update label */
+//		var buttonCode='<i class="fa fa-floppy-o" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i><span style="float: right;">Finish Editing Page</span>';
+		var buttonCode='<i class="fa fa-pencil" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i><span style="float: right;">Finish Editing Page</span>';
+		$('.button-edit').html(buttonCode);
+
+		/* enable sortable on auto data table */
+		$('.connectedSortable').sortable( "enable" );
+	
+		/* change edit to visible */
+		$(".edit").show();
+
+
+	} else {
+		/* turn off editability */
+
+	
+		/* edit button update label */
+		var buttonCode='<i class="fa fa-pencil" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i><span style="float: right;">Edit Page</span>';
+		$('.button-edit').html(buttonCode);
+
+		/* disable sortable on auto data table */
+		$('.connectedSortable').sortable( "disable" );
+
+
+		/* hide our edit sections */
+		$(".edit").hide();
+	}
+
+	/* set global variable */
+	edit=editable;
+}
+
+/* extract filename after last / and before ? */
+function filename(path){
+	path = path.substring(path.lastIndexOf("/")+ 1);
+	return (path.match(/[^.]+(\.[^?#]+)?/) || [])[0];
+}
+
+
+function updateRow(index,value,path) {
+	/* find the table body for autoData */
+	var tbody;
+
+	/* make more human readable path */
+	var pathPretty = 'Path: ' + path.replace("root_","").replace("_","&gt;");
+
+	if ( -1 != $.inArray(index,idsAutoDataHidden) ) {
+		/* put into autoDataHidden */
+		tbody = $('#autoDataHidden').children('tbody');
+	} else { 
+		/* check to see if autoData_path exists */
+		if ( 0 == $('#autoData_' + path).length ) {
+			console.log('#autoData_' + path + ' does not exist. Adding.');
+
+			// $("#autoData").append('<tbody id="autoData_' + path + '"><tr><td id="autoData_' + path + '_head" style="background-color: red;" colspan="3">' + pathPretty + '</td></tr></tbody>');
+			$("#autoData").append('<tbody id="autoData_' + path + '"></tbody>');
+		}
+
+		/* autoData_path */
+		tbody = $('#autoData_' + path);
+	}
+
+
+	/* compose the row as HTML */
+	var rowCode = '<tr id="autoData_' + path + '_' + index + '" title="' + pathPretty + '"><td class="right"><span style="font-weight: bold;">' + value.title + '</span><span class="debug"><br />(' + path + ')</span></td><td>' + value.value + '</td><td>' + value.units + '&nbsp;</td></tr>';
+
+	if ( $("#autoData_" + path + '_' + index).length ) {
+		/* replace row contents */
+		$("#autoData_" + path + '_' + index).replaceWith(rowCode);
+	} else {
+		/* add row to table */
+		tbody.append(rowCode);
+	}
+
+}
+
+function walkData3(data,path) {
+//	console.log("# walkData() path='" + path + "'");
+//	console.log(data);
+
+	if ( data.title !== undefined ) {
+//		console.log("# '" + path + "' title is '" + data.title + "'");
+		delete data.title;
+	}
+
+	/* iterate through and print values */
+	$.each(data, function(key, value) {
+		if ( '_bserver_' === key || 'title' === key || 'cameras' === key ) {
+			return true;
+		}
+
+
+		/* check to see if we have an object, if so then act on or recurse */
+		for ( var property in value ) {
+			if ( '_bserver_' === property ) {
+				continue;
+			}
+
+			if ( value.title !== undefined && value.value !== undefined && property === 'value' ) {
+				updateRow(key,value,path);
+//				console.log("#\t\tdata element path='" + path + "' key='" + key + "' title='" + value.title + "' value='" + value.value + "'");
+//				console.log(value);
+				delete value.value;
+			} else if ( typeof value[property] == "object" ) {
+				walkData3(value,path + "_" + key);
+			}
+		}
+
+	});
+
+//	console.log("# returning walkData() path='" + path + "'");
+}
+
+
+function loadNewData(){
+	if ( pauseLoadNewData ) {
+		/* try again in a second */
+		console.log("# loadNewData() pauseLoadNewData ... trying again in 1 second");
+		setTimeout(loadNewData,refreshSeconds*1000);
+		return;
+	}
+	
+	$.getJSON(dataURL, 
+		function(data) {
+			hideWarn();
+
+			/* set the title of the page */
+			if (  data.title !== undefined ) {
+				$(document).attr("title", data.title + ": wsSimpleDisplay");
+				$("#dataTitle").html(data.title);
+			} else {
+				$("#dataTitle").html(stationID + "<span style=\"font-size: 0.7em;\"><br />(site title not set)</span>");
+			}
+
+
+			walkData3(data,'root');
+
+			
+			if ( 0==$('#autoData tr > td').length ) {
+				/* no data, let's hide the divData */
+				$('#divData').hide();
+				/* and change the divCamStatic0 css to full width */
+				$('#divCamStatic0').attr('class','pure-u-1 l-box');
+			} else {
+				$('#divCamStatic0').attr('class','pure-u-1 pure-u-sm-1-2 l-box');
+				$('#divData').show();
+
+			}
+
+			/* cameras */
+			if (  data.cameras !== undefined && data.cameras[0].image_url !== undefined ) {
+				/* set the camera img src */
+				$("#camStatic0").attr("src", data.cameras[0].image_url);
+				$("#camStatic").show();
+			} else {
+				$("#camStatic").hide();
+			}
+		}
+		); 
+
+	setTimeout(loadNewData,refreshSeconds*1000);
+}
+
+function hideWarn(){
+	$("#connection_warn").hide();
+}
+
+$(document).ready(function(){
+	/* put URL parameters into $.urlParam */
+	$.urlParam = function(name){
+		var results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(window.location.href);
+		if ( results==null ) {
+			return null;
+		} else {
+			return results[1] || 0;
+		}
+	}
+
+
+	/* process URL parameters */
+	if ( $.urlParam('dataURL') !== null && $.urlParam('dataURL').length ) {
+		dataURL=$.urlParam('dataURL');
+		console.log('# dataURL: ' + dataURL + ' (as specified from URL parameter)');
+	}
+
+	if ( $.urlParam('refreshSeconds') !== null && $.urlParam('refreshSeconds').length ) {
+		refreshSeconds=$.urlParam('refreshSeconds');
+		console.log('# refreshSeconds: ' + refreshSeconds + ' (as specified from URL parameter)');
+	}
+
+	if ( $.urlParam('debug') !== null && $.urlParam('debug').length && "1"===$.urlParam('debug') ) {
+		debug=true;
+		console.log('# debug: ' + debug + ' (as specified from URL parameter)');
+	} else {
+		/* add CSS element for display: none to debug CSS */
+		$("head").append('<style type="text/css"></style>');
+		var newStyleElement = $("head").children(':last');
+		newStyleElement.html('.debug { display: none; }');
+	}
+
+	if ( $.urlParam('edit') !== null && $.urlParam('edit').length && "1"===$.urlParam('edit') ) {
+		edit=true;
+		console.log('# edit: ' + edit + ' (as specified from URL parameter)');
+	}
+
+	/* setup AJAX data source */
+	$( document ).ajaxError(function(event){
+		console.log("no response from JSON server");
+		$("#connection_warn").show();
+		$("#connection_warn").append(event);
+	});
+	loadNewData();
+
+	/* put dataURL on page */
+	$("#spanDataURL").html(dataURL);
+	$("#spanDataURL").attr('href',dataURL);
+
+	/* determine station ID */
+	stationID=dataURL.split("/").pop();
+
+	$("#spanRefreshSeconds").html(refreshSeconds);
+
+	/* make connectedSortable class tables sortable */
+	$('.connectedSortable').sortable({
+		items: 'tbody > tr',
+		connectWith: ".connectedSortable",
+		axis: 'y',
+		/* events */
+    		receive: function(e, ui) {
+			/* always puts at the end of the list */
+			 $(this).find("tbody").append(ui.item);
+		},
+		start: function(e, ui) {
+			console.log('sortable start event');
+			/* disable loading new data so object references don't change mid update */
+			pauseLoadNewData=true;
+		},
+		stop: function(e, ui) {
+			console.log('sortable stop event');
+			/* resume updating data */
+			pauseLoadNewData=false;
+			idsUpdate();
+		}
+	});
+
+
+	/* setup page editability */
+	pageEdit(edit);
+
+
+	/* button popup initialization */
+	$('#camera_popup').popup({
+		type: 'tooltip',
+		background: true,
+		autozindex: true,
+//		horizontal: 'leftedge',
+		vertical: 'topedge',
+		escape: true
+	});
+
+	/* button handlers */
+	$('.button-save').click( function() {
+		console.log("# button-save clicked");
+		pageSave();
+	});
+
+	$('.button-edit').click( function() {
+		console.log("# button-edit clicked");
+		pageEdit(!edit);
+	});
+
+	$('.button-fullsize').click( function() {
+		console.log("# button-fullsize clicked");
+
+		/* find the full size image URL */
+		var url = $("#camStatic0").attr("src");
+		/* open new tab */
+		var win = window.open(url,'_blank');
+		/* focus on new tab */
+		win.focus();
+	});
+
+	$('.button-download').click( function() {
+		console.log("# button-download clicked");
+
+		/* find the full size image URL */
+		var url = $("#camStatic0").attr("src");
+
+		/* full size image clickable download (may not work in all browsers) */
+		var downloadFilename=filename(dataURL) + "_0_" + filename(url);
+		console.log("#    url='" + url + "'");
+		console.log("#    suggested download filename='" + downloadFilename + "'");
+
+		/* chrome won't allow suggested filename if image is coming from different origin.
+		so we do an XHR to get the image and then send it to the browser to download from ourself.
+		this requires the server with the images to have a permissive "Access-Control-Allow-Origin".
+		this can be done in apache with mod_headers and the following entry in a <VirtualHost> directive:
+		Header set Access-Control-Allow-Origin "*"
+		This XHR might not be nescessary for other browsers
+		*/
+		var xhr = new XMLHttpRequest();
+		xhr.open( "GET", url, true );
+		xhr.responseType = "arraybuffer";
+		xhr.onload = function( e ) {
+		    var arrayBufferView = new Uint8Array( this.response );
+		    var blob = new Blob( [ arrayBufferView ], { type: "image/jpeg" } );
+		    var urlCreator = window.URL || window.webkitURL;
+		    imageUrl = urlCreator.createObjectURL( blob );
+
+		    var link = document.createElement("a");
+		    link.href = imageUrl;
+		    link.download = downloadFilename;
+		    link.style.display = "none";
+		    var evt = new MouseEvent("click", {
+		        "view": window,
+		        "bubbles": true,
+		        "cancelable": true
+		    });
+		    document.body.appendChild(link);
+		    link.dispatchEvent(evt);
+		    document.body.removeChild(link);
+	};
+	xhr.send();
+
+	});
+
+	$('.button-email').click( function() {
+		console.log("# button-email clicked");
+
+		/* find the full size image URL */
+		var url = "mailto:?to=&subject=" + escape(document.title) + "&body=" + escape(window.location.href);
+		console.log("#    url='" + url + "'");
+		/* open mailto URL */
+		var win = window.open(url);
+	});
+
+	$('.button-facebook').click( function() {
+		var shareurl = window.location.href;
+		window.open('https://www.facebook.com/sharer/sharer.php?u='+escape(shareurl)+'&t='+escape(document.title), '');
+//, 'menubar=no,toolbar=no,resizable=yes,scrollbars=yes,height=300,width=600');
+		return false;
+	});
+
+});
+</script>
+<div id="connection_warn" style="text-align: center; width: 800px; padding: 10px; margin-right: auto; margin-left: auto; background-color: orange; color: white; display: none;" onclick="hideWarn()">
+	<h1>No Response From Server. Please check to make sure you are still connected to the Internet and have a valid data URL.</h1>
+</div>
+
+
+<!-- popup when clicking on camera image -->
+<div id="camera_popup" style="background-color:rgba(0, 0, 255, 0.2); padding: 10px; border-radius: 10px; font-size: 2em; font-weight: bold;">
+		<button type="button" class="button-fullsize" style="display: block; width: 95%;">
+			<i class="fa fa-expand" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
+			<span style="float: right;">View Full Size</span>
+		</button>
+
+		<button type="button" class="button-download" style="display: block; width: 95%;">
+			<i class="fa fa-download" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
+			<span style="float: right;">Download Image</span>
+		</button>
+
+		<button type="button" class="button-email" style="display: block; width: 95%;">
+			<i class="fa fa-envelope" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
+			<span style="float: right;">E-mail Link</span>
+		</button>
+
+<!--
+		<button type="button" class="button-facebook" style="display: block; width: 95%;">
+			<i class="fa fa-facebook-official" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
+			<span style="float: right;">Facebook Share</span>
+		</button>
+-->
+
+		<button type="button" class="button-edit" style="display: block; width: 95%;">
+<!--
+			<i class="fa fa-pencil" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
+			<span style="float: right;">Edit Page</span>
+-->
+		</button>
+
+		<!-- TODO: save button should only appear when there is something to save -->
+		<button type="button" class="button-save" style="display: block; width: 95%;">
+			<i class="fa fa-floppy-o" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
+			<span style="float: right;">Save Page Layout</span>
+		</button>
+
+		<button type="button" class="camera_popup_close" style="display: block; width: 95%;">
+			<i class="fa fa-close" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
+			<span style="float: right;">Close Menu</span>
+		</button>
+</div>
+
+
+<div class="pure-g">
+
+	<!-- camera image -->
+	<div class="pure-u-1 pure-u-sm-1-2 l-box" id="divCamStatic0">
+		<a id="camStatic0_a" class="camera_popup_open"><img class="pure-img" src="http://www.aprsworld.com/images/logo_250.png" id="camStatic0" alt="Web Camera 0" /></a>
+
+	</div>
+
+	<!-- data -->
+	<div class="pure-u-1 pure-u-sm-1-2 l-box" id="divData">
+<table id="autoData" class="pure-table pure-table-horizontal pure-table-striped connectedSortable" style="width: 100%">
+	<thead>
+		<tr>
+			<th colspan="3" id="dataTitle" style="text-align: center"></th>
+		</tr>
+	</thead>
+</table>
+
+<!-- only available in edit mode -->
+<div class="edit">
+<h2>Hidden Data</h2>
+<table id="autoDataHidden" class="pure-table pure-table-horizontal pure-table-striped connectedSortable" style="width: 100%">
+	<thead>
+		<tr>
+			<th>title</th>
+			<th>value</th>
+			<th>units</th>
+		</tr>
+	</thead>
+	<tbody>
+<!-- will insert data automatically here -->
+	</tbody>
+</table>
+	</div>
+</div>
+
+<!-- below image and data we get a full width div -->
+	<div class="pure-u-1 l-box debug">
+
+<h1>Meta Data</h1>
+<ul>
+	<li>dataURL=<a href="" id='spanDataURL'>loading</a></li>
+	<li>refreshSeconds: <span id='spanRefreshSeconds'>loading</li>
+</ul>
+
+	</div>
+</div>
+</body>
+</html>
