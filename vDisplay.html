@@ -266,13 +266,28 @@ function loadNewData(){
 		function(data) {
 			hideWarn();
 
-			/* set the title of the page from meta data */
+			/* meta data */
 			if (  data._.t !== undefined ) {
+				/* document title */
 				$(document).attr("title", data._.t + ": vDisplay");
 				$("#dataTitle").html(data._.t);
 			} else {
 				$("#dataTitle").html("<span style=\"font-size: 0.7em;\"><br />(site title not set)</span>");
 			}
+
+			if (  data._.h !== undefined ) {
+				/* header */
+				$("#metaHeader").html(data._.h);
+			}
+
+			if (  data._.f !== undefined ) {
+				/* footer */
+				$("#metaFooter").html(data._.f);
+			}
+
+
+
+
 
 
 			walkData3(data,'root');
@@ -504,15 +519,10 @@ $(document).ready(function(){
 			<span style="float: right;">E-mail Link</span>
 		</button>
 
-<!--
-		<button type="button" class="button-facebook" style="display: block; width: 95%;">
-			<i class="fa fa-facebook-official" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
-			<span style="float: right;">Facebook Share</span>
-		</button>
--->
 
 		<button type="button" class="button-edit" style="display: block; width: 95%;">
 <!--
+			/* handled in JavaScript */
 			<i class="fa fa-pencil" aria-hidden="true" style="float: left; padding-top: 5px; padding-bottom: 5px; padding-right: 15px;"></i>
 			<span style="float: right;">Edit Page</span>
 -->
@@ -535,6 +545,7 @@ $(document).ready(function(){
 
 	<!-- data -->
 	<div class="pure-u-1 pure-u-sm-1-2 l-box" id="divData">
+		<span id='metaHeader'></span>
 		<table id="autoData" class="pure-table pure-table-horizontal pure-table-striped connectedSortable" > <!-- style="width: 100%">-->
 			<thead>
 				<tr>
@@ -542,6 +553,7 @@ $(document).ready(function(){
 				</tr>
 			</thead>
 		</table>
+		<span id='metaFooter'></span>
 
 		<!-- only available in edit mode -->
 		<div class="edit">
@@ -566,15 +578,13 @@ $(document).ready(function(){
 		<a id="camStatic0_a" class="camera_popup_open"><img class="pure-img" src="http://www.aprsworld.com/images/logo_250.png" id="camStatic0" alt="Web Camera 0" /></a>
 	</div>
 
-<!-- below image and data we get a full width div -->
+	<!-- below image and data we get a full width div -->
 	<div class="pure-u-1 l-box debug">
-
-<h1>Meta Data</h1>
-<ul>
-	<li>dataURL=<a href="" id='spanDataURL'>loading</a></li>
-	<li>refreshSeconds: <span id='spanRefreshSeconds'>loading</li>
-</ul>
-
+		<h1>Meta Data</h1>
+		<ul>
+			<li>dataURL=<a href="" id='spanDataURL'>loading</a></li>
+			<li>refreshSeconds: <span id='spanRefreshSeconds'>loading</span></li>
+		</ul>
 	</div>
 </div>
 </body>
