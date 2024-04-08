@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 	<head>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<title>wsSimpleDisplay</title>
+		<title>vDisplay</title>
 
 		<!-- css needed for jquery UI -->
 		<link href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" rel="stylesheet" type="text/css" /> 
@@ -56,16 +56,14 @@ button {
 	<body>
 
 <script type="text/JavaScript">
-var saveURL="http://data.aprsworld.com/wsSimpleDisplay/save.php";
-var dataURL="http://cam.aprsworld.com:8888/data/now.json/A4753";
+var saveURL="http://data.aprsworld.com/vDisplay/save.php";
+var dataURL="http://data.aprsworld.com/data/view/viewJSON.php?station_id=A4800";
 var refreshSeconds=5;
 var debug=false;
 var edit=false;
 /* track our elements on page when done with editing */
 var idsAutoData = [];
 var idsAutoDataHidden = [];
-
-var stationID="";
 
 var pauseLoadNewData=false;
 
@@ -169,11 +167,18 @@ function filename(path){
 
 
 function updateRow(index,value,path) {
+	console.log("# updateRow(index,value,path)=updateRow('" + index + "','" + value + "','" + path + "')");
+
 	/* find the table body for autoData */
 	var tbody;
 
 	/* make more human readable path */
-	var pathPretty = 'Path: ' + path.replace("root_","").replace("_","&gt;");
+//	var trTitle = 'Path: ' + path.replace("root_","").replace("_","&gt;");
+	var trTitle='';
+	if ( value.d !== undefined ) {
+		trTitle=value.d;
+	}
+
 
 	if ( -1 != $.inArray(index,idsAutoDataHidden) ) {
 		/* put into autoDataHidden */
@@ -183,7 +188,6 @@ function updateRow(index,value,path) {
 		if ( 0 == $('#autoData_' + path).length ) {
 			console.log('#autoData_' + path + ' does not exist. Adding.');
 
-			// $("#autoData").append('<tbody id="autoData_' + path + '"><tr><td id="autoData_' + path + '_head" style="background-color: red;" colspan="3">' + pathPretty + '</td></tr></tbody>');
 			$("#autoData").append('<tbody id="autoData_' + path + '"></tbody>');
 		}
 
@@ -193,7 +197,7 @@ function updateRow(index,value,path) {
 
 
 	/* compose the row as HTML */
-	var rowCode = '<tr id="autoData_' + path + '_' + index + '" title="' + pathPretty + '"><td class="right"><span style="font-weight: bold;">' + value.title + '</span><span class="debug"><br />(' + path + ')</span></td><td>' + value.value + '</td><td>' + value.units + '&nbsp;</td></tr>';
+	var rowCode = '<tr id="autoData_' + path + '_' + index + '" title="' + trTitle + '"><td class="right"><span style="font-weight: bold;">' + value.t + '</span><span class="debug"><br />(' + path + ')</span></td><td>' + value.v + '</td><td>' + value.u + '&nbsp;</td></tr>';
 
 	if ( $("#autoData_" + path + '_' + index).length ) {
 		/* replace row contents */
@@ -206,32 +210,39 @@ function updateRow(index,value,path) {
 }
 
 function walkData3(data,path) {
-//	console.log("# walkData() path='" + path + "'");
+	console.log("# walkData() path='" + path + "'");
 //	console.log(data);
 
-	if ( data.title !== undefined ) {
+//	if ( data.title !== undefined ) {
 //		console.log("# '" + path + "' title is '" + data.title + "'");
-		delete data.title;
-	}
+//		delete data.title;
+//	}
 
 	/* iterate through and print values */
 	$.each(data, function(key, value) {
-		if ( '_bserver_' === key || 'title' === key || 'cameras' === key ) {
+		if ( '_' == key ) {
+			/* skip page meta data */
 			return true;
 		}
 
 
+		console.log("key: " + key);
+
 		/* check to see if we have an object, if so then act on or recurse */
 		for ( var property in value ) {
-			if ( '_bserver_' === property ) {
-				continue;
-			}
+			console.log("property: " + property);
 
-			if ( value.title !== undefined && value.value !== undefined && property === 'value' ) {
+
+//			if ( '_bserver_' === property ) {
+//				console.log('# apparently skipping _bserver');
+//				continue;
+//			}
+
+			if ( value.t !== undefined && value.v !== undefined && property === 'v' ) {
 				updateRow(key,value,path);
-//				console.log("#\t\tdata element path='" + path + "' key='" + key + "' title='" + value.title + "' value='" + value.value + "'");
-//				console.log(value);
-				delete value.value;
+				console.log("#\t\tdata element path='" + path + "' key='" + key + "' t='" + value.t + "' v='" + value.v + "'");
+				console.log(value);
+				delete value.v;
 			} else if ( typeof value[property] == "object" ) {
 				walkData3(value,path + "_" + key);
 			}
@@ -239,7 +250,7 @@ function walkData3(data,path) {
 
 	});
 
-//	console.log("# returning walkData() path='" + path + "'");
+	console.log("# returning walkData() path='" + path + "'");
 }
 
 
@@ -255,12 +266,12 @@ function loadNewData(){
 		function(data) {
 			hideWarn();
 
-			/* set the title of the page */
-			if (  data.title !== undefined ) {
-				$(document).attr("title", data.title + ": wsSimpleDisplay");
-				$("#dataTitle").html(data.title);
+			/* set the title of the page from meta data */
+			if (  data._.t !== undefined ) {
+				$(document).attr("title", data._.t + ": vDisplay");
+				$("#dataTitle").html(data._.t);
 			} else {
-				$("#dataTitle").html(stationID + "<span style=\"font-size: 0.7em;\"><br />(site title not set)</span>");
+				$("#dataTitle").html("<span style=\"font-size: 0.7em;\"><br />(site title not set)</span>");
 			}
 
 
@@ -345,9 +356,6 @@ $(document).ready(function(){
 	/* put dataURL on page */
 	$("#spanDataURL").html(dataURL);
 	$("#spanDataURL").attr('href',dataURL);
-
-	/* determine station ID */
-	stationID=dataURL.split("/").pop();
 
 	$("#spanRefreshSeconds").html(refreshSeconds);
 
@@ -525,39 +533,38 @@ $(document).ready(function(){
 
 <div class="pure-g">
 
+	<!-- data -->
+	<div class="pure-u-1 pure-u-sm-1-2 l-box" id="divData">
+		<table id="autoData" class="pure-table pure-table-horizontal pure-table-striped connectedSortable" > <!-- style="width: 100%">-->
+			<thead>
+				<tr>
+					<th colspan="3" id="dataTitle" style="text-align: center"></th>
+				</tr>
+			</thead>
+		</table>
+
+		<!-- only available in edit mode -->
+		<div class="edit">
+			<h2>Hidden Data</h2>
+			<table id="autoDataHidden" class="pure-table pure-table-horizontal pure-table-striped connectedSortable"><!-- style="width: 100%">-->
+				<thead>
+					<tr>
+						<th>title</th>
+						<th>value</th>
+						<th>units</th>
+					</tr>
+				</thead>
+				<tbody>
+					<!-- will insert data automatically here -->
+				</tbody>
+			</table>
+		</div>
+	</div>
+
 	<!-- camera image -->
 	<div class="pure-u-1 pure-u-sm-1-2 l-box" id="divCamStatic0">
 		<a id="camStatic0_a" class="camera_popup_open"><img class="pure-img" src="http://www.aprsworld.com/images/logo_250.png" id="camStatic0" alt="Web Camera 0" /></a>
-
 	</div>
-
-	<!-- data -->
-	<div class="pure-u-1 pure-u-sm-1-2 l-box" id="divData">
-<table id="autoData" class="pure-table pure-table-horizontal pure-table-striped connectedSortable" style="width: 100%">
-	<thead>
-		<tr>
-			<th colspan="3" id="dataTitle" style="text-align: center"></th>
-		</tr>
-	</thead>
-</table>
-
-<!-- only available in edit mode -->
-<div class="edit">
-<h2>Hidden Data</h2>
-<table id="autoDataHidden" class="pure-table pure-table-horizontal pure-table-striped connectedSortable" style="width: 100%">
-	<thead>
-		<tr>
-			<th>title</th>
-			<th>value</th>
-			<th>units</th>
-		</tr>
-	</thead>
-	<tbody>
-<!-- will insert data automatically here -->
-	</tbody>
-</table>
-	</div>
-</div>
 
 <!-- below image and data we get a full width div -->
 	<div class="pure-u-1 l-box debug">
